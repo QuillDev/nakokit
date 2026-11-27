@@ -1,38 +1,23 @@
 # nakokit
 
-Multi-platform full-stack starter template for QuillDev apps: **Web + Electron + Android**, unified around end-to-end TypeScript safety and `nakomponents`.
+Interactive CLI scaffolder for QuillDev full-stack apps (Web, Electron, Android).
 
-## What's Inside
-
-- **Frontend:** React 19, Vite 8, TypeScript (strict), Tailwind CSS v4, `nakomponents` (near-black `#09090b` theme + light mode + shared primitives), Lucide icons, Inter font.
-- **Backend + End-to-End Types:** Bun + SQLite (`bun:sqlite`) + **Elysia** (`elysia`) with TypeBox schemas + **Eden** (`@elysiajs/eden`) typed client shared across Web, Electron, and Android.
-- **Desktop (`desktop/`):** Electron shell with `contextIsolation`, `sandbox`, strict `mainFrame` IPC validation, persisted window bounds, `electron-builder` packaging, and a shared TypeScript IPC contract (`shared/ipc.ts`).
-- **Android (`android/`):** Kotlin WebView shell (Gradle 9 / AGP 9) with edge-to-edge near-black chrome, Custom Tabs external link handling, cookie persistence, back-button navigation, and unit tests.
-- **Quality Gate (`bun run check`):** `tsc --noEmit`, `oxlint --deny-warnings` (extending `nakomponents/oxlint.json`), `react-doctor`, `bun test`, and `vite build`.
-
-## Quick Start
-
-Create a new app in one command:
+## Usage
 
 ```bash
-bunx github:QuillDev/nakokit my-app
-cd my-app
-bun install
-bun run check
-bun run dev
+bunx github:QuillDev/nakokit
 ```
 
-Or click **Use this template** on GitHub, clone your repo, and rename it in place:
+Or pass a name and flags directly:
 
 ```bash
-bun run init my-app
-bun install
-bun run check
+bunx github:QuillDev/nakokit my-app --yes
+bunx github:QuillDev/nakokit my-app --yes --no-android --no-desktop
 ```
 
-## Targets
+## What It Scaffolds
 
-- Web + API dev: `bun run dev`
-- Production server: `bun run build && bun run start`
-- Desktop (Electron): `cd desktop && bun install && cd .. && bun run desktop:dev`
-- Android (Kotlin WebView): `bun run android:test` / `bun run android:build`
+- **Web + API (always included):** React 19, Vite 8, TypeScript (strict), Tailwind CSS v4, `nakomponents`, Elysia + `@elysiajs/eden` end-to-end typed client, `bun run check` (`tsc`, `oxlint`, `react-doctor`, `bun test`, `vite build`).
+- **Electron desktop (optional):** Sandboxed Electron shell with a shared typed IPC contract (`shared/ipc.ts`), persisted window bounds, and `electron-builder` packaging.
+- **Android (optional):** Kotlin WebView shell (Gradle 9 / AGP 9) with edge-to-edge dark chrome, Custom Tabs, cookie persistence, and unit tests.
+- **SQLite (optional):** `bun:sqlite` initialized in WAL mode and decorated onto the Elysia app context.
