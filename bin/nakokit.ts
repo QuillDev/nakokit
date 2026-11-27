@@ -7,13 +7,14 @@ import {
   multiselect,
   note,
   outro,
+  select,
   spinner,
   text,
 } from "@clack/prompts";
 import { existsSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
-import { deriveNames, scaffoldProject } from "../src/scaffold.ts";
+import { type DatabaseEngine, deriveNames, scaffoldProject } from "../src/scaffold.ts";
 
 type CliArgs = {
   help: boolean;
@@ -21,22 +22,37 @@ type CliArgs = {
   name?: string;
   desktop?: boolean;
   android?: boolean;
-  sqlite?: boolean;
+  database?: DatabaseEngine;
   install?: boolean;
   git?: boolean;
 };
 
+function parseDatabaseFlag(value: string): DatabaseEngine {
+  if (value === "sqlite" || value === "postgres" || value === "none") {
+    return value;
+  }
+  throw new Error(`Invalid --db value "${value}". Use sqlite, postgres, or none.`);
+}
+
 export function parseArgs(argv: readonly string[]): CliArgs {
   const parsed: CliArgs = { help: false, yes: false };
-  for (const arg of argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!;
     if (arg === "-h" || arg === "--help") parsed.help = true;
     else if (arg === "-y" || arg === "--yes") parsed.yes = true;
     else if (arg === "--desktop") parsed.desktop = true;
     else if (arg === "--no-desktop") parsed.desktop = false;
     else if (arg === "--android") parsed.android = true;
     else if (arg === "--no-android") parsed.android = false;
-    else if (arg === "--sqlite") parsed.sqlite = true;
-    else if (arg === "--no-sqlite") parsed.sqlite = false;
+    else if (arg === "--db") {
+      const next = argv[++i];
+      if (!next) throw new Error("Missing value after --db (use sqlite, postgres, or none).");
+      parsed.database = parseDatabaseFlag(next);
+    } else if (arg.startsWith("--db=")) {
+      parsed.database = parseDatabaseFlag(arg.slice("--db=".length));
+    } else if (arg === "--sqlite") parsed.database = "sqlite";
+    else if (arg === "--postgres") parsed.database = "postgres";
+    else if (arg === "--no-db" || arg === "--no-sqlite") parsed.database = "none";
     else if (arg === "--install") parsed.install = true;
     else if (arg === "--no-install") parsed.install = false;
     else if (arg === "--git") parsed.git = true;
@@ -53,18 +69,20 @@ Usage:
   bunx github:QuillDev/nakokit [app-name] [options]
 
 Options:
-  -y, --yes         Skip prompts and use defaults
-  --desktop         Include Electron desktop shell (default)
-  --no-desktop      Skip Electron desktop shell
-  --android         Include Kotlin WebView Android shell (default)
-  --no-android      Skip Android shell
-  --sqlite          Include bun:sqlite database setup (default)
-  --no-sqlite       Skip SQLite setup
-  --install         Run bun install after scaffolding (default)
-  --no-install      Skip bun install
-  --git             Initialize a git repository (default)
-  --no-git          Skip git init
-  -h, --help        Show this help
+  -y, --yes                   Skip prompts and use defaults
+  --db <sqlite|postgres|none> Database engine with Kysely + Zod (default: sqlite)
+  --sqlite                    Shorthand for --db sqlite
+  --postgres                  Shorthand for --db postgres
+  --no-db                     Shorthand for --db none
+  --desktop                   Include Electron desktop shell (default)
+  --no-desktop                Skip Electron desktop shell
+  --android                   Include Kotlin WebView Android shell (default)
+  --no-android                Skip Android shell
+  --install                   Run bun install after scaffolding (default)
+  --no-install                Skip bun install
+  --git                       Initialize a git repository (default)
+  --no-git                    Skip git init
+  -h, --help                  Show this help
 `;
 
 function unwrapPrompt<T>(value: T): Exclude<T, symbol> {
@@ -123,35 +141,47 @@ async function main() {
   const names = deriveNames(appName ?? "");
   const targetDir = resolve(process.cwd(), names.slug);
 
+  let database = cli.database;
+  if (database === undefined) {
+    database = interactive
+      ? unwrapPrompt(
+          await select<DatabaseEngine>({
+            message: "Database (Kysely + Zod)",
+            initialValue: "sqlite",
+            options: [
+              { value: "sqlite", label: "SQLite", hint: "Kysely + bun:sqlite (WAL)" },
+              { value: "postgres", label: "Postgres", hint: "Kysely + pg" },
+              { value: "none", label: "None", hint: "Elysia + Zod only" },
+            ],
+          }),
+        )
+      : "sqlite";
+  }
+
   let desktop = cli.desktop;
   let android = cli.android;
-  let sqlite = cli.sqlite;
 
-  if (interactive && (desktop === undefined || android === undefined || sqlite === undefined)) {
+  if (interactive && (desktop === undefined || android === undefined)) {
     const selected = unwrapPrompt(
       await multiselect({
-        message: "Select extras (Web + Elysia/Eden + nakomponents always included)",
+        message: "Native shells (Web + Elysia/Eden + Zod + nakomponents always included)",
         required: false,
         initialValues: [
           ...(desktop !== false ? ["desktop"] : []),
           ...(android !== false ? ["android"] : []),
-          ...(sqlite !== false ? ["sqlite"] : []),
         ],
         options: [
           { value: "desktop", label: "Electron desktop", hint: "sandboxed shell + typed IPC" },
           { value: "android", label: "Android", hint: "Kotlin WebView shell" },
-          { value: "sqlite", label: "SQLite", hint: "bun:sqlite in WAL mode" },
         ],
       }),
     );
     desktop ??= selected.includes("desktop");
     android ??= selected.includes("android");
-    sqlite ??= selected.includes("sqlite");
   }
 
   desktop ??= true;
   android ??= true;
-  sqlite ??= true;
 
   let shouldInstall = cli.install;
   if (shouldInstall === undefined) {
@@ -175,7 +205,7 @@ async function main() {
     appName: names.slug,
     desktop,
     android,
-    sqlite,
+    database,
   });
 
   if (shouldGit) {
@@ -201,6 +231,7 @@ async function main() {
   const steps = [
     `cd ${names.slug}`,
     ...(!shouldInstall ? ["bun install"] : []),
+    ...(database === "postgres" ? ["cp .env.example .env  # set DATABASE_URL"] : []),
     "bun run dev",
     "bun run check",
     ...(desktop ? ["cd desktop && bun install && cd .. && bun run desktop:dev"] : []),

@@ -1,7 +1,9 @@
-import type { Database } from "bun:sqlite";
 import { existsSync, statSync } from "node:fs";
 import { resolve, sep } from "node:path";
-import { Elysia, t } from "elysia";
+import { Elysia } from "elysia";
+import { sql, type Kysely } from "kysely";
+import { queryOne, type Database } from "./database.ts";
+import { HealthResponseSchema, PingRowSchema } from "./schemas.ts";
 
 function resolveStaticFile(staticDir: string, pathname: string): string | null {
   const root = resolve(staticDir);
@@ -20,7 +22,7 @@ function resolveStaticFile(staticDir: string, pathname: string): string | null {
   return null;
 }
 
-export function createApp(options: { db: Database; staticDir?: string; version?: string }) {
+export function createApp(options: { db: Kysely<Database>; staticDir?: string; version?: string }) {
   const version = options.version ?? "0.1.0";
   const staticDir = options.staticDir;
 
@@ -28,17 +30,17 @@ export function createApp(options: { db: Database; staticDir?: string; version?:
     .decorate("db", options.db)
     .get(
       "/api/health",
-      () => ({
-        ok: true as const,
-        name: "nakokit",
-        version,
-      }),
+      async ({ db }) => {
+        await queryOne(db, sql`select 1 as ok`, PingRowSchema);
+        return {
+          ok: true as const,
+          name: "nakokit",
+          version,
+          database: "sqlite" as const,
+        };
+      },
       {
-        response: t.Object({
-          ok: t.Literal(true),
-          name: t.String(),
-          version: t.String(),
-        }),
+        response: HealthResponseSchema,
       },
     );
 
