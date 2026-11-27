@@ -9,7 +9,8 @@ const dbPath = process.env.DB_PATH ?? resolve(process.cwd(), "nakokit.sqlite");
 const distDir = resolve(process.cwd(), "dist");
 
 const db = openDatabase(dbPath);
-const app = createApp(db, {
+const app = createApp({
+  db,
   staticDir: existsSync(distDir) ? distDir : undefined,
 });
 
