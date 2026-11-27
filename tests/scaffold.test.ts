@@ -33,24 +33,31 @@ describe("deriveNames", () => {
 });
 
 describe("parseArgs", () => {
-  test("parses positional name and toggle flags", () => {
-    expect(parseArgs(["my-app", "-y", "--no-android", "--no-sqlite", "--no-install"])).toEqual({
+  test("parses positional name, database flag, and toggle flags", () => {
+    expect(parseArgs(["my-app", "-y", "--db", "postgres", "--no-android", "--no-install"])).toEqual({
       help: false,
       yes: true,
       name: "my-app",
+      database: "postgres",
       android: false,
-      sqlite: false,
       install: false,
+    });
+    expect(parseArgs(["my-app", "--db=none"])).toEqual({
+      help: false,
+      yes: false,
+      name: "my-app",
+      database: "none",
     });
   });
 
-  test("throws on unknown flags", () => {
+  test("throws on invalid db engine or unknown flags", () => {
+    expect(() => parseArgs(["--db", "mysql"])).toThrow();
     expect(() => parseArgs(["--bogus"])).toThrow();
   });
 });
 
 describe("scaffoldProject", () => {
-  test("scaffolds full-stack project with web, Electron, Android, and SQLite", () => {
+  test("scaffolds full-stack project with Kysely SQLite, Zod, Electron, and Android", () => {
     const parent = mkdtempSync(join(tmpdir(), "nakokit-full-"));
     tempDirs.push(parent);
     const target = join(parent, "star-tracker");
@@ -60,13 +67,14 @@ describe("scaffoldProject", () => {
       appName: "star-tracker",
       desktop: true,
       android: true,
-      sqlite: true,
+      database: "sqlite",
     });
 
     expect(names.slug).toBe("star-tracker");
     expect(existsSync(join(target, "desktop", "src", "main.mjs"))).toBe(true);
     expect(existsSync(join(target, "shared", "ipc.ts"))).toBe(true);
     expect(existsSync(join(target, "server", "database.ts"))).toBe(true);
+    expect(existsSync(join(target, "server", "schemas.ts"))).toBe(true);
     expect(existsSync(join(target, "tests", "ipc.test.ts"))).toBe(true);
     expect(
       existsSync(
@@ -77,8 +85,12 @@ describe("scaffoldProject", () => {
     const pkg = JSON.parse(readFileSync(join(target, "package.json"), "utf8")) as {
       name: string;
       scripts: Record<string, string>;
+      dependencies: Record<string, string>;
     };
     expect(pkg.name).toBe("star-tracker");
+    expect(pkg.dependencies.kysely).toBeDefined();
+    expect(pkg.dependencies.zod).toBeDefined();
+    expect(pkg.dependencies.pg).toBeUndefined();
     expect(pkg.scripts["desktop:dev"]).toBeDefined();
     expect(pkg.scripts["android:build"]).toBeDefined();
 
@@ -87,7 +99,32 @@ describe("scaffoldProject", () => {
     expect(gradle).toContain("STAR_TRACKER_ANDROID_VERSION_CODE");
   });
 
-  test("scaffolds minimal web-only project when desktop, android, and sqlite are disabled", () => {
+  test("scaffolds Postgres project with Kysely PostgresDialect, pg, and .env.example", () => {
+    const parent = mkdtempSync(join(tmpdir(), "nakokit-pg-"));
+    tempDirs.push(parent);
+    const target = join(parent, "billing-app");
+
+    scaffoldProject({
+      targetDir: target,
+      appName: "billing-app",
+      desktop: false,
+      android: false,
+      database: "postgres",
+    });
+
+    const pkg = JSON.parse(readFileSync(join(target, "package.json"), "utf8")) as {
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies.kysely).toBeDefined();
+    expect(pkg.dependencies.pg).toBeDefined();
+    expect(pkg.devDependencies["@types/pg"]).toBeDefined();
+    expect(existsSync(join(target, ".env.example"))).toBe(true);
+    expect(readFileSync(join(target, "server", "database.ts"), "utf8")).toContain("PostgresDialect");
+    expect(readFileSync(join(target, "server", "app.ts"), "utf8")).toContain('"postgres" as const');
+  });
+
+  test("scaffolds minimal web-only project when desktop, android, and database are disabled", () => {
     const parent = mkdtempSync(join(tmpdir(), "nakokit-web-"));
     tempDirs.push(parent);
     const target = join(parent, "tiny-app");
@@ -97,7 +134,7 @@ describe("scaffoldProject", () => {
       appName: "tiny-app",
       desktop: false,
       android: false,
-      sqlite: false,
+      database: "none",
     });
 
     expect(existsSync(join(target, "desktop"))).toBe(false);
@@ -109,22 +146,25 @@ describe("scaffoldProject", () => {
     const pkg = JSON.parse(readFileSync(join(target, "package.json"), "utf8")) as {
       name: string;
       scripts: Record<string, string>;
+      dependencies: Record<string, string>;
     };
     expect(pkg.name).toBe("tiny-app");
+    expect(pkg.dependencies.kysely).toBeUndefined();
+    expect(pkg.dependencies.zod).toBeDefined();
     expect(pkg.scripts["desktop:dev"]).toBeUndefined();
     expect(pkg.scripts["android:build"]).toBeUndefined();
 
     const appTs = readFileSync(join(target, "server", "app.ts"), "utf8");
-    expect(appTs).not.toContain("bun:sqlite");
+    expect(appTs).not.toContain("kysely");
     expect(appTs).toContain('name: "tiny-app"');
   });
 
-  test("CLI runs non-interactively with --yes --no-install --no-git", async () => {
+  test("CLI runs non-interactively with --yes --db postgres --no-install --no-git", async () => {
     const parent = mkdtempSync(join(tmpdir(), "nakokit-cli-"));
     tempDirs.push(parent);
 
     const proc = Bun.spawn(
-      ["bun", CLI_PATH, "demo-app", "--yes", "--no-install", "--no-git"],
+      ["bun", CLI_PATH, "demo-app", "--yes", "--db", "postgres", "--no-install", "--no-git"],
       { cwd: parent, stdout: "pipe", stderr: "pipe" },
     );
     const stdout = await new Response(proc.stdout).text();
@@ -134,6 +174,6 @@ describe("scaffoldProject", () => {
     expect(code).toBe(0);
     expect(stderr).toBe("");
     expect(stdout).toContain("Created demo-app");
-    expect(existsSync(join(parent, "demo-app", "src", "App.tsx"))).toBe(true);
+    expect(existsSync(join(parent, "demo-app", ".env.example"))).toBe(true);
   });
 });

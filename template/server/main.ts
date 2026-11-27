@@ -5,10 +5,9 @@ import { openDatabase } from "./database.ts";
 
 const port = Number(process.env.PORT ?? "8080");
 const hostname = process.env.HOST ?? "127.0.0.1";
-const dbPath = process.env.DB_PATH ?? resolve(process.cwd(), "nakokit.sqlite");
 const distDir = resolve(process.cwd(), "dist");
 
-const db = openDatabase(dbPath);
+const db = openDatabase();
 const app = createApp({
   db,
   staticDir: existsSync(distDir) ? distDir : undefined,
