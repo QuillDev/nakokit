@@ -1,0 +1,39 @@
+{
+  "name": "nakokit-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/main.mjs",
+  "scripts": {
+    "dev": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^35.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "moe.nakode.nakokit",
+    "productName": "Nakokit",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      {
+        "from": "../dist",
+        "to": "web"
+      }
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Utility"
+    },
+    "mac": {
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "target": ["nsis"]
+    }
+  }
+}

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+desktop/node_modules/
+desktop/dist/
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/local.properties
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.DS_Store
+*.log
